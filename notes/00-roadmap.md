@@ -15,7 +15,7 @@
 | 6 | Phase 1 实验设计：数据区标记探针镜像 | 待 4 | `notes/04-phase1-experiment.md` |
 | 7 | section 2 ARM 载荷切分（zImage/dtb/rootfs）+ rootfs 内容侦察 | ✅ 完成（2026-10-09） | `tools/split_arm_payload.py` + `tools/split_arm_chunks.py` + `notes/firmware/em1m3-arm-payload.md`（516 子块全识别；**ARM Linux 侧无图像管线**） |
 | 8 | olycompress 逆向 / SCPU (Cortex-M) 固件反汇编 / luke 头格式 | 待 | — |
-| 9 | rec00 6-bit 编码区破解（15MB，疑似图像引擎/ITRON 载荷） | 待（新增，**3D LUT 关键路径**） | — |
+| 9 | rec00 6-bit 编码区破解（15MB，疑似图像引擎/ITRON 载荷） | ✅ 完成（2026-10-09，证伪） | `tools/split_rec00.py` + `notes/firmware/em1m3-rec00.md`：rec00=画面比例图形资产库（29 JPEG 测试图+10 剖面表）+ E-PL3 同源 6-bit 遗留块（c00）；**非图像引擎**；消费者=section 0 主控（引用 0x43f00400 ×40） |
 
 ## 关键待验证问题（按优先级）
 
@@ -31,9 +31,11 @@
 4. **图像管线在哪个核上**：✅ **排除 ARM Linux 侧**（2026-10-09，任务 7）：
    内核 4.4.127 无 v4l2/media 子系统、dtb（panasonic,dc13）无 ISP/显示节点、
    rootfs 无色彩代码——A9 只当数学协处理器（hhhr=手持像素合成，几何矩阵）+ 网络子系统
-   （WiFi/BLE/lighttpd）。**落点收窄到：section 0 主控 或 rec00 15MB 6-bit 编码区**
-   （疑似图像引擎/ITRON 载荷，待任务 9 破解）。色彩最强线索：rec04 BE 浮点曲线/矩阵系数表 +
-   rec03 多通道分档表（Linux 不消费，指向主侧）→ 见 `notes/firmware/em1m3-arm-payload.md` §6–§8
+   （WiFi/BLE/lighttpd）。✅ **排除 rec00**（2026-10-09，任务 9）：那是图形资产库。
+   **剩余假设：图像管线在 section 0 主控（uITRON）**——该区有 LUT×15/gamma×9/color×166
+   strings 命中 + `load arm itron` 说明 A9 有 ITRON 人格但载荷未定位。
+   → **任务 4（section 0 ISA 认证）升级为关键路径**，之后在 section 0 里定位
+   Picture Mode 曲线/矩阵表（rec01–04 参数表的消费者就是主控）
 
 ## 已知事实（2026-10-09 侦察）
 
