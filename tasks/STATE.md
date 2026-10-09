@@ -19,14 +19,19 @@ E-M1 Mark III 固件逆向，目标机内自定义 Picture Mode（1D LUT + 3x3 �
 | 4 | CPU 架构确认 | 🔄 大半完成 | 架构图 `notes/firmware/em1m3-arch-map.md`（uITRON 主控 + ARM A9 Linux + Cortex-M SCPU + luke）；**剩：section 0 主控 ISA 认证（需 mn103 反汇编器）** |
 | 5 | OM Workspace 更新器静态分析 | 待 | PTP 0x911c/0x9121–0x9126 |
 | 6 | Phase 1 探针镜像实验设计 | 待 4 | 数据区标记，验证签名校验强度 |
-| 7 | section 2 ARM 载荷切分 + rootfs 侦察 | 待（优先，性价比最高） | 11 条记录逐块导出 → binwalk/dtc |
+| 7 | section 2 ARM 载荷切分 + rootfs 侦察 | ✅（session 2 完成） | 516 子块全识别；**ARM Linux 侧无图像管线**；A9=hhhr 数学协处理器+网络子系统；SoC=panasonic,dc13 |
 | 8 | olycompress 逆向 / SCPU 反汇编 / luke 头格式 | 待 | 详见 arch-map 下一步清单 |
+| 9 | rec00 6-bit 编码区破解（15MB，疑似图像引擎） | 待 | **3D LUT 关键路径**；与 E-PL3 block 2 6-bit 格式同构，先查 E-PL3 笔记 §有无解法 |
 
 ## session 2 战果（已 commit）
 
-- 任务 3 完成：容器格式确认与 E-PL3 同构，置乱表逐字节相同
-- 新发现：多 CPU 混合架构（roadmap 问题 3/4 部分回答）
-- 工具：`tools/parse_em1m3.py`（注意库的 decode_container 有 E-PL3 假设，脚本自写循环）
+- 任务 3 完成：容器与 E-PL3 同构，置乱表逐字节相同（`tools/parse_em1m3.py`）
+- 任务 4 大半：多 CPU 架构图（`notes/firmware/em1m3-arch-map.md`）
+- 任务 7 完成：ARM 载荷全切分（`tools/split_arm_payload.py` + `tools/split_arm_chunks.py`，
+  516 子块），**排除 ARM Linux 侧图像管线假设**，落点收窄到 section 0 主控 / rec00 6-bit 区；
+  色彩最强线索 = rec04 BE 浮点曲线/矩阵表 + rec03 分档表
+- 嵌套子表格式逆向：净荷起点 = 表地址 − rec 基址 − 0x20；rec 尾 0x40 footer 魔数 4F451390，
+  打包时间戳 2022-12-19 02:34 UTC
 
 ## 环境备忘（macOS, darwin）
 
@@ -52,12 +57,13 @@ E-M1 Mark III 固件逆向，目标机内自定义 Picture Mode（1D LUT + 3x3 �
 
 ## 下一session接续点
 
-1. **首选：任务 7**（section 2 ARM 载荷切分）——纯明文，工具现成（file/binwalk/dtc 可 brew 装），
-   delegate subagent 干；产出 `notes/firmware/em1m3-arm-payload.md`。
-   看点：rootfs 里有没有图像管线用户态/驱动（决定 LUT hack 面）
+1. **首选：任务 9**（rec00 6-bit 区破解）——15MB @ `firmware/work/arm/rec00_0x43f00400.bin`，
+   与 E-PL3 block 2 同构；先读 `notes/02-epl3-prior-art.md` 查 E-PL3 有没有解过 6-bit 格式，
+   没有就从熵/字节值分布/与 ARM 地址映射入手。**这是 3D LUT 落点的决定性未知数**
 2. 任务 4 收尾：先 `gobjdump --info | grep -i mn103` 查 brew binutils；没有就装 Ghidra（brew install --cask ghidra）+ MN103 插件，或 Reko
-3. 并行可做：任务 5（OM Workspace app bundle 静态分析，third_party 里拉 app）/
-   任务 8（olycompress：S1 rec[0] 有 (0x000c9cec 压缩, 0x005a549e 解压) 样本对）
+3. 并行可做：任务 5（OM Workspace 静态分析）/ 任务 8（olycompress：S1 rec[0] 有
+   (0x000c9cec 压缩, 0x005a549e 解压) 样本对；SCPU arm-none-eabi 反汇编；
+   rec04/rec03 色彩表结构解析——对照 Picture Mode 语义）
 4. 每完成一任务：更新本文件 + roadmap，commit + push
 
 ## 工作约定
