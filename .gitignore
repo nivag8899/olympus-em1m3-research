@@ -6,3 +6,4 @@
 *.BIN
 *.bin
 *.dmg
+__pycache__/

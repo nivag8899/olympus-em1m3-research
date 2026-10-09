@@ -29,19 +29,31 @@
 | 0x16 | unk3[6] | 0 | |
 | 0x1C | checksum (LE32) | 0 | ✅ header 的 checksum 字段必须为 0（E-PL3 规则） |
 
-## 待验证清单（下一步：跑 e-pl3-research 的 source.py）
+## 全链解析结果（2026-10-09，`tools/parse_em1m3.py`，报告 `work/parse-report.md`）
 
-1. **全文件 section 链解析**：从 offset 0 依次读 32B header → body → 32B tail，
-   确认各 section 边界与总数（文件 0x068C0040，section 0 body 0x019FFFC0，
-   后面应还有数个 section —— 期待类似 E-PL3 的 数据/资源/H8 结构）
-2. **tail checksum 校验**：`(-Σ LE32 words) mod 2³²`，覆盖 header(0) ++ 解扰后 body ++ tail 前 28B
-3. **descramble 验证**：section 0 flags=0x0100，用 E-PL3 的逆变换解出 body，
-   若出现规律性代码/字符串 → 架构与变换全部复用成功
-4. **架构确认**：0x40800000 处的指令流是 MN103 还是别的（objdump -m mn10300 试译）
+原待验证清单 4 项：**(1)(2)(3) 全部通过；(4) 部分解决**（见 `notes/firmware/em1m3-arch-map.md`）。
+
+| # | 文件偏移 | load | body_length | ver | flags | checksum | 性质 |
+|---|---------|------|-------------|-----|-------|----------|------|
+| 0 | 0x00000000 | 0x40800000 | 0x019fffc0 (27MB) | 0x1600 | 0x0100 | PASS | uITRON 主控（疑似 MN103 系） |
+| 1 | 0x01a00000 | 0x42400000 | 0x01afffc0 (28MB) | 0x0100 | 0x0101 | PASS | 数据镜像/本地化（UTF-16LE + olycompress） |
+| 2 | 0x03500000 | 0x43f00000 | 0x0323ffc0 (53MB) | 0x0100 | 0x0106 | PASS | ARM A9 (DC13)：zImage + dc13.dtb + rootfs + 15MB 6-bit 区 |
+| 3 | 0x06740000 | 0x00000000 | 0x0003ffc0 (256KB) | 0x0001 | 0x010e | PASS | "luke" 双核驱动子系统（0x12345678 魔数头） |
+| 4 | 0x06780000 | 0x47140000 | 0x000fffc0 (1MB) | 0x1000 | 0x0102 | PASS | JPEG 参数资源（DHT 表） |
+| 5 | 0x06880000 | 0x08000000 | 0x0003ffc0 (256KB) | 0x1000 | 0x0107 | PASS | SCPU = ARM Cortex-M（电源/按键/USB-PD/固件解压） |
+
+- **EOF 覆盖 PASS**：6 个 section 恰好铺满文件，无残余字节
+- **checksum 全 PASS**：checksum 覆盖解扰后 body，6/6 通过 ⇒ E-PL3 的
+  `DESCRAMBLE_ORDER` 置换表 + XOR 0xFF 在 E-M1 III 上**逐字节相同**（§1.4 的担忧关闭）
+- **flags 扩展**：0x0107/0x010e 超出 E-PL3 白名单 0x0100–0x0106，
+  但 checksum PASS 证明置乱方案相同，仅编号扩展
+- 解码产物：`firmware/work/section_NN_<load>.bin`（gitignored）
+- ⚠️ 库的 `decode_container`/`verify_source` 不可直接用（前者有 E-PL3 假设，后者绑 registry），
+  脚本自写了链式循环
 
 ## 意义
 
-- 若 (1)-(4) 全部通过：E-PL3 的 `source.py`（换 registry）+ binutils mn10300 objdump + Reko
-  工具链即插即用，Phase 0 最难的部分直接省掉
-- flags=0x0100 说明 OMDS 在 2020 年机型上仍沿用同一套加扰（安全性几乎为零，但求个麻烦），
-  也说明 host parser 的 checksum boundary 大概率同样没有签名 —— 对 Phase 1（探针镜像）是利好
+- E-PL3 工具链核心（header/descramble/checksum 语义）**完全复用成功**，Phase 0 最难的部分已解决
+- flags=0x0100 系说明 OMDS 在 2020 年机型上仍沿用同一套加扰（安全性几乎为零），
+  host parser 大概率同样只做 checksum 不做签名 —— 对 Phase 1（探针镜像）是利好
+- 下一瓶颈：架构认证（section 0 是不是 MN103）与 ARM 载荷切分（见 arch-map 笔记）
